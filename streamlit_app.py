@@ -38,13 +38,18 @@ def load_data():
 
 df = load_data()
 
-# 4. NAVIGATION
+# 4. NAVIGATION & SIDEBAR
 st.sidebar.image("https://www.unodc.org/res/images/unodc-logo.png", width=150)
 page = st.sidebar.selectbox("Navigate System", ["Request Portal", "Executive Dashboard"])
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("❓ **Need Help?**")
 st.sidebar.markdown('<a href="https://github.com/sanika-fyi/sanika-unodc/wiki" target="_blank" class="doc-link">📖 View Documentation</a>', unsafe_allow_html=True)
+
+# Shared Logic for Status Filtering
+status_col = None
+if df is not None:
+    status_col = next((c for c in df.columns if any(k in c.lower() for k in ['status', 'review', 'stage'])), None)
 
 # ---------------------------------------------------------
 # PAGE 1: REQUEST PORTAL (SUBMITTER VIEW)
@@ -69,7 +74,6 @@ if page == "Request Portal":
     # 5. DEDUPLICATION CHECK
     if submitted:
         if project_name and df is not None:
-            # Simple logic: check if name or supplier exists with similar amount
             similar_exists = df[
                 (df.astype(str).apply(lambda x: x.str.contains(project_name, case=False)).any(axis=1)) |
                 (df.astype(str).apply(lambda x: x.str.contains(supplier, case=False)).any(axis=1))
@@ -94,13 +98,17 @@ if page == "Request Portal":
     st.divider()
     st.subheader("Your Active Requests")
     if df is not None:
-        # Simulate "My Requests" filter
         st.dataframe(df.head(5), use_container_width=True)
 
 # ---------------------------------------------------------
 # PAGE 2: EXECUTIVE DASHBOARD (APPROVER VIEW)
 # ---------------------------------------------------------
 elif page == "Executive Dashboard" and df is not None:
+    # Sidebar filter specifically for Approvers
+    st.sidebar.markdown("---")
+    st.sidebar.header("Approver Controls")
+    show_actions_only = st.sidebar.checkbox("🚨 Show Only Actions Required", value=False)
+
     st.title("🇺🇳 UNODC ROSA | Executive Dashboard")
     
     # 6. KPIS
@@ -113,23 +121,27 @@ elif page == "Executive Dashboard" and df is not None:
         st.metric("Total Value (USD)", f"${total:,.0f}")
     with m3:
         # Dynamic calculation for "Actions Required"
-        status_col = next((c for c in df.columns if any(k in c.lower() for k in ['status', 'review', 'stage'])), None)
         count_val = len(df[df[status_col].str.contains('Prior|Pending|Review', na=False, case=False)]) if status_col else 0
         st.metric("Actions Required", count_val)
     with m4:
-        st.metric("Avg. TAT", "3.8 Days") # Turnaround Time metric
+        st.metric("Avg. TAT", "3.8 Days")
 
     st.divider()
 
     col_left, col_right = st.columns([3, 1])
 
     with col_left:
-        st.markdown("### 📋 Transaction Ledger & Tracking")
-        search = st.text_input("Search Ledger (Supplier, ID, Status)...")
-        
+        # Filter data based on sidebar checkbox
         display_df = df
+        if status_col and show_actions_only:
+            display_df = df[df[status_col].str.contains('Prior|Pending|Review', na=False, case=False)]
+            st.markdown("### 🚨 Review List (Actions Required)")
+        else:
+            st.markdown("### 📋 Transaction Ledger & Tracking")
+
+        search = st.text_input("Search Ledger (Supplier, ID, Status)...")
         if search:
-            display_df = df[df.apply(lambda row: search.lower() in row.astype(str).str.lower().values, axis=1)]
+            display_df = display_df[display_df.apply(lambda row: search.lower() in row.astype(str).str.lower().values, axis=1)]
         
         st.dataframe(display_df, use_container_width=True, height=400)
         
@@ -138,7 +150,6 @@ elif page == "Executive Dashboard" and df is not None:
 
     with col_right:
         st.markdown("### 📈 Turnaround Time (TAT)")
-        # Mocking a TAT chart (Processing days per category)
         chart_data = pd.DataFrame({
             'Category': ['Travel', 'Procure', 'Vendor'],
             'Days': [2.4, 5.1, 3.8]
@@ -155,8 +166,9 @@ elif page == "Executive Dashboard" and df is not None:
     ac1, ac2, ac3 = st.columns([2, 1, 1])
     with ac1:
         name_col = next((c for c in df.columns if any(k in c.lower() for k in ['supplier', 'description', 'borrower', 'project', 'name'])), df.columns[0])
-        options = df[name_col].unique()[:50]
-        selected = st.selectbox("Select Project for Decision:", options)
+        # Only show options from current view
+        options = display_df[name_col].unique()[:50]
+        selected = st.selectbox("Select Project for Decision:", options if len(options) > 0 else ["No records matching filters"])
     with ac2:
         action = st.radio("Management Decision", ["Approve", "Review", "Reject"], horizontal=True)
     with ac3:
