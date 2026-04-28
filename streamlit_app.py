@@ -92,8 +92,7 @@ if page == "Request Portal":
             
             with st.spinner("Processing Submission..."):
                 time.sleep(1.5)
-                st.success(f"Successfully Submitted! Tracking ID: ROSA-{datetime.now().strftime('%Y%m%d')}-0042")
-                st.balloons()
+                st.success(f"Request successfully logged. Tracking ID: ROSA-{datetime.now().strftime('%Y%m%d')}-0042")
 
     st.divider()
     st.subheader("Your Active Requests")
@@ -176,7 +175,6 @@ elif page == "Executive Dashboard" and df is not None:
         if st.button("Commit Decision", use_container_width=True):
             with st.spinner("Writing to Database..."):
                 time.sleep(1)
-                st.success(f"Success: {selected} updated.")
-                st.balloons()
+                st.success(f"System Record Updated: {selected} status set to {action}.")
 else:
     st.error("Technical Error: Unable to fetch cloud-hosted data.")
